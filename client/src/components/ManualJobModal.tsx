@@ -4,6 +4,7 @@ import { Modal } from "./Modal";
 
 const PORTALS: Portal[] = ["LinkedIn", "Indeed", "Wellfound", "Naukri", "Flexjobs", "Google"];
 const JOB_TYPES: JobType[] = ["Remote", "Hybrid", "In Office"];
+const OTHER_SOURCE = "Other";
 
 interface ManualJobModalProps {
   open: boolean;
@@ -17,7 +18,8 @@ export function ManualJobModal({ open, onClose, onAdd }: ManualJobModalProps) {
   const [location, setLocation] = useState("");
   const [url, setUrl] = useState("");
   const [type, setType] = useState<JobType>("Remote");
-  const [portal, setPortal] = useState<Portal>("LinkedIn");
+  const [portal, setPortal] = useState<Portal | typeof OTHER_SOURCE>("LinkedIn");
+  const [customPortal, setCustomPortal] = useState("");
 
   function reset() {
     setTitle("");
@@ -26,17 +28,20 @@ export function ManualJobModal({ open, onClose, onAdd }: ManualJobModalProps) {
     setUrl("");
     setType("Remote");
     setPortal("LinkedIn");
+    setCustomPortal("");
   }
 
   function handleSubmit() {
-    if (!title.trim() || !company.trim()) return;
+    const isOther = portal === OTHER_SOURCE;
+    const finalPortal = isOther ? customPortal.trim() : portal;
+    if (!title.trim() || !company.trim() || !finalPortal) return;
     onAdd({
       id: `manual:${Date.now()}`,
       title,
       company,
       location,
       type,
-      portal,
+      portal: finalPortal,
       url,
       description: "",
       requirements: [],
@@ -86,13 +91,22 @@ export function ManualJobModal({ open, onClose, onAdd }: ManualJobModalProps) {
           <select
             className="flex-1 rounded-lg border border-slate-300 px-3 py-2 text-sm"
             value={portal}
-            onChange={(e) => setPortal(e.target.value as Portal)}
+            onChange={(e) => setPortal(e.target.value as Portal | typeof OTHER_SOURCE)}
           >
             {PORTALS.map((p) => (
               <option key={p} value={p}>{p}</option>
             ))}
+            <option value={OTHER_SOURCE}>Other</option>
           </select>
         </div>
+        {portal === OTHER_SOURCE && (
+          <input
+            className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+            placeholder="Enter source name"
+            value={customPortal}
+            onChange={(e) => setCustomPortal(e.target.value)}
+          />
+        )}
         <button
           type="button"
           onClick={handleSubmit}

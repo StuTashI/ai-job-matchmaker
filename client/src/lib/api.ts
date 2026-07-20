@@ -1,4 +1,4 @@
-import type { Job, JobAnalysis, JobSearchCriteria, ParsedResume, Referrer } from "./types";
+import type { Job, JobAnalysis, JobSearchCriteria, LinkedInJob, LinkedInPostSearchCriteria, ParsedResume, Referrer } from "./types";
 
 async function handleJson<T>(res: Response): Promise<T> {
   if (!res.ok) {
@@ -22,6 +22,16 @@ export async function searchJobs(criteria: JobSearchCriteria): Promise<Job[]> {
     body: JSON.stringify(criteria),
   });
   const data = await handleJson<{ jobs: Job[] }>(res);
+  return data.jobs;
+}
+
+export async function searchLinkedInPosts(criteria: LinkedInPostSearchCriteria): Promise<LinkedInJob[]> {
+  const res = await fetch("/api/linkedin-posts/search", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(criteria),
+  });
+  const data = await handleJson<{ jobs: LinkedInJob[] }>(res);
   return data.jobs;
 }
 

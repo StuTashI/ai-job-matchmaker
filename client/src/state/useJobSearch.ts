@@ -1,5 +1,6 @@
 import { useState } from "react";
 import type { Job, JobType, Portal } from "../lib/types";
+import { PRODUCT_MANAGEMENT_ROLES } from "../lib/searchSuggestions";
 
 export interface JobSearchFormState {
   titles: string[];
@@ -10,14 +11,7 @@ export interface JobSearchFormState {
 
 const ALL_PORTALS: Portal[] = ["LinkedIn", "Indeed", "Wellfound", "Naukri", "Flexjobs", "Google"];
 
-export const DEFAULT_ROLE_TITLES = [
-  "Product Manager",
-  "Senior Product Manager",
-  "Staff Product Manager",
-  "Lead Product Manager",
-  "Associate Director of Product",
-  "Director of Product",
-];
+export const DEFAULT_ROLE_TITLES = PRODUCT_MANAGEMENT_ROLES;
 
 const DEFAULT_FORM_STATE: JobSearchFormState = {
   titles: DEFAULT_ROLE_TITLES,

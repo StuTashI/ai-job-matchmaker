@@ -7,10 +7,11 @@ Everything runs **entirely on your own machine** (or your own hosting). There's 
 ## Features
 
 - **Resume Parser** — Upload a PDF, DOCX, or plain-text resume. It's parsed into structured data (skills, experience, education) plus a readable "Career Snapshot" summary.
-- **Job Search** — Searches LinkedIn, Indeed, Wellfound, Naukri, Flexjobs, and Google Jobs in parallel for the roles and locations you specify.
-- **Match Scoring** — Every job gets a match score (function, domain, skills, experience, scope, and company-context fit) plus a plain-English verdict on whether it's worth applying to, and how (apply directly, seek a referral first, etc.).
-- **Outreach Drafting** — Generates a LinkedIn message and a cold email for a plausible referrer contact at each company, with a regenerate option if you want a different draft.
-- **Application Tracker** — A Kanban board (Interested → Applied → Interviewing → Offer Received → Archived) with drag-and-drop, backed by your browser's local storage.
+- **Find Jobs** — Searches LinkedIn, Indeed, Wellfound, Naukri, Flexjobs, and Google Jobs in parallel for the roles and locations you specify.
+- **LinkedIn Job Posts** — A second search mode that finds LinkedIn *posts* announcing hiring (not the structured job board — people/companies posting "we're hiring X"), scored the same way as Find Jobs. Filters out non-job posts automatically, and never invents a company/title it isn't confident about.
+- **Match Scoring** — Every job gets a match score (function, domain, skills, experience, scope, and company-context fit) plus a plain-English verdict on whether it's worth applying to, and how (apply directly, seek a referral first, etc.). A "Today's Priority" banner summarizes each batch as an insight (e.g. "3 jobs look like a strong match — 2 ready to apply directly").
+- **Outreach Drafting** — Generates a LinkedIn message and a cold email for a plausible referrer contact at each company, with a regenerate option that produces a genuinely different draft, not just a reword.
+- **Application Tracker** — A Kanban board (Interested → Applied → Interviewing → Offer Received → Archived) with drag-and-drop, backed by your browser's local storage. Manually-added jobs can use any source name, not just the built-in portals.
 
 ## How it stays useful without paid API access
 
@@ -20,7 +21,7 @@ Every AI-backed feature (resume parsing, scoring, outreach drafting) has a **bui
 
 - **Node.js 20 or newer** (tested on Node 24) and npm
 - A **Gemini API key** — optional, but unlocks the AI-backed features. Get one free at [Google AI Studio](https://aistudio.google.com/apikey).
-- An **Apify API token** — optional, unlocks real job scraping instead of the AI-search fallback. Get one at [apify.com](https://apify.com) (free tier available).
+- An **Apify API token** — optional, unlocks real job scraping instead of the AI-search fallback. Get one at [apify.com](https://apify.com) (free tier available). Note: the LinkedIn Job Posts search is pay-per-post on Apify's side (fractions of a cent each), and there's no usage cap built into the app — keep an eye on how many role titles you search at once (free-tier Apify accounts cap at 4 keywords per search anyway).
 
 You can run the whole app with neither key — it'll just use the local fallbacks throughout.
 
@@ -44,7 +45,7 @@ npm run dev
 
 Then open **http://localhost:5173** in your browser. The client runs on port 5173 and proxies API calls to the server on port 4000.
 
-**Don't want to edit `.env` by hand?** You can also leave the keys blank and paste them in later from inside the running app itself — open the hamburger menu → **Configuration** → **API Keys**. That page writes back to `.env` for you and picks up the change without a restart.
+**Don't want to edit `.env` by hand?** You can also leave the keys blank and paste them in later from inside the running app itself — open **Configuration** → **API Keys** in the sidebar. That page writes back to `.env` for you and picks up the change without a restart.
 
 ## Available Scripts
 

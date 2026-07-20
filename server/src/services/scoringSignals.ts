@@ -35,6 +35,11 @@ export interface ScoringSignals {
   applicantCount?: number;
   companySize?: CompanySize;
   noticePeriodMonths?: number;
+  // True only for jobs sourced from the LinkedIn Job Posts feature (social posts, not
+  // structured job-board listings) — narrows the zero-requirements skills default (see
+  // scoreSkills()) to that feature specifically. Find Jobs (any portal, including the
+  // LinkedIn job-board actor) always scores via the original relevancy-doc formula.
+  isLinkedInPost?: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -320,6 +325,7 @@ export function extractSignalsHeuristic(resume: ParsedResume, job: Job): Scoring
     applicantCount: job.applicantCount,
     companySize: job.companySize,
     noticePeriodMonths: resume.noticePeriodMonths,
+    isLinkedInPost: "author" in job,
   };
 }
 
@@ -382,9 +388,21 @@ function scoreExperience(signals: ScoringSignals): number {
   return 95;
 }
 
+// Find Jobs (any portal) always uses the original relevancy-doc formula: zero
+// requirements defaults to a ratio of 1 (a job with no listed requirements imposes no
+// unmet requirement). LinkedIn Job Posts is the one exception — narrative social posts
+// routinely have zero extractable requirements, and a ratio of 1 there would grant a
+// free perfect skills score purely from absence of data, not a confirmed match — so
+// that feature specifically defaults to a neutral 0.6 instead. See isLinkedInPost.
+const NO_REQUIREMENTS_RATIO_DEFAULT = 1;
+const NO_REQUIREMENTS_RATIO_LINKEDIN_POST = 0.6;
+
 function scoreSkills(signals: ScoringSignals): number {
-  const requiredRatio = signals.requiredSkillsTotal > 0 ? signals.requiredSkillsMatched / signals.requiredSkillsTotal : 1;
-  const niceRatio = signals.niceToHaveSkillsTotal > 0 ? signals.niceToHaveSkillsMatched / signals.niceToHaveSkillsTotal : 1;
+  const noRequirementsRatio = signals.isLinkedInPost ? NO_REQUIREMENTS_RATIO_LINKEDIN_POST : NO_REQUIREMENTS_RATIO_DEFAULT;
+  const requiredRatio =
+    signals.requiredSkillsTotal > 0 ? signals.requiredSkillsMatched / signals.requiredSkillsTotal : noRequirementsRatio;
+  const niceRatio =
+    signals.niceToHaveSkillsTotal > 0 ? signals.niceToHaveSkillsMatched / signals.niceToHaveSkillsTotal : noRequirementsRatio;
   return clamp(requiredRatio * 80 + niceRatio * 20, 0, 100);
 }
 
@@ -656,6 +674,17 @@ function buildConfidenceNote(gapType: GapType, path: GuidancePath, hasReframeGap
   }
 }
 
+// A job/post with no extractable requirements at all (common for narrative LinkedIn
+// posts with no explicit skill list; rare but possible for a malformed JD) gets a
+// neutral, not perfect, skills sub-score — but that neutrality is invisible unless we
+// say so. Appended rather than folded into buildConfidenceNote so the gap-type-specific
+// note logic stays untouched; this is a signal-quality caveat, not a gap-type caveat.
+function appendThinSignalCaveat(note: string, signals: ScoringSignals): string {
+  if (!signals.isLinkedInPost) return note;
+  if (signals.requiredSkillsTotal > 0 || signals.niceToHaveSkillsTotal > 0) return note;
+  return `${note} This post didn't include an explicit skills/requirements list, so the skill-fit portion of this score is a neutral estimate, not a confirmed match.`;
+}
+
 function buildGuidance(
   signals: ScoringSignals,
   matchScore: number,
@@ -671,7 +700,7 @@ function buildGuidance(
     gapType,
     path,
     doThis: overrides?.doThis && overrides.doThis.length > 0 ? overrides.doThis : buildDoThis(signals, path),
-    confidenceNote: buildConfidenceNote(gapType, path, Boolean(topReframeGap(signals))),
+    confidenceNote: appendThinSignalCaveat(buildConfidenceNote(gapType, path, Boolean(topReframeGap(signals))), signals),
   };
 }
 

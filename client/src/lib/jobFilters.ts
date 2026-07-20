@@ -36,7 +36,7 @@ const DATE_FILTER_MS: Record<Exclude<DateFilter, "any">, number> = {
   "30d": 30 * 24 * 60 * 60 * 1000,
 };
 
-function matchesSourceFilter(portal: Portal, filter: SourceFilter): boolean {
+function matchesSourceFilter(portal: string, filter: SourceFilter): boolean {
   if (filter === "any") return true;
   return portal === filter;
 }

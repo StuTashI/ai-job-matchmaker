@@ -8,6 +8,7 @@ import { jobsRouter } from "./routes/jobs.js";
 import { matchRouter } from "./routes/match.js";
 import { outreachRouter } from "./routes/outreach.js";
 import { configRouter } from "./routes/config.js";
+import { linkedInPostsRouter } from "./routes/linkedInPosts.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -23,6 +24,7 @@ app.use("/api/jobs", jobsRouter);
 app.use("/api/match", matchRouter);
 app.use("/api/outreach", outreachRouter);
 app.use("/api/config", configRouter);
+app.use("/api/linkedin-posts", linkedInPostsRouter);
 
 app.get("/api/health", (_req, res) => {
   res.json({ ok: true, hasGemini: env.hasGemini, hasApify: env.hasApify });
