@@ -41,16 +41,16 @@ function fiveStepRulesBlock(referrer: Referrer): string {
 
   return `Build EVERY message from these five parts, in this order:
 1. HOOK (1 line): Name the exact job title as a real, current opening — never a vague "exploring opportunities." Include the job link if one is given (see below), stated as the reason for reaching out. Never open with "I hope you're doing well" or "I came across your profile" — the posting itself is the hook.
-2. BRIDGE (1-2 lines): Who the candidate is, told through relevance to the recipient — not a full bio. Pick at most 2 concrete achievements (name real things: what was built, scale, metrics) that map most directly to what this role needs.
+2. BRIDGE (1-2 lines): Who the candidate is, told through relevance to the recipient — not a full bio. Pick at most 2 concrete achievements, preferring ones with a real quantified number (%, ARR, scale, time saved) over narrative-only ones when both are available. Close the Bridge by naming an ACTUAL overlapping skill, domain, or requirement from the job facts below — never the generic filler "maps closely to what this role is asking for" with nothing specific attached to it; name the specific thing that maps. For the email specifically, give this closing relevance clause its own full sentence (a little more room than the LinkedIn message, which should stay to one tight sentence for the whole Bridge).
 3. THE ASK (1 line, always explicit — never implied): ${
     posterAsk
       ? `${referrerFirstName} is the person who posted this role, so the ask is: happy to apply through the standard process, but wanted to introduce myself directly first — or ask a direct question about the role.`
       : `${referrerFirstName} is a product/eng person at the company, not the poster, so the ask is: would they be willing to refer the candidate, or point them to the right person.`
   }
-4. HONEST GAP (optional, 1 line): Include ONLY if a real gap is given below. Name it directly, once, without apologizing — this reads as more credible than oversell, and pre-empts the objection instead of letting the reader find it later.
+4. HONEST GAP (optional, 1 line): Include ONLY if a real gap is given below. Name it directly, once, without apologizing — this reads as more credible than oversell, and pre-empts the objection instead of letting the reader find it later. Phrase it grammatically — if the gap text already ends in a noun like "experience" or "knowledge", don't append "experience" again (avoid "compliance knowledge experience").
 5. LOW-FRICTION CLOSE (1 line): Make it easy to say yes to something small ("a two-line reply is more than enough", "even a redirect to the right person would help") — not a hard ask for a scheduled call as the only option.
 
-Do NOT write generic recruiter-speak ("align with your goals", "translate into impact", "I am confident I would be a great asset"). Avoid exclamation points and forced enthusiasm. Never ask more than one question. Never fabricate or shorten a job link — if none is given, simply don't include one.
+Do NOT write generic recruiter-speak ("align with your goals", "translate into impact", "I am confident I would be a great asset") or buzzwords ("visionary", "passionate", "guru", "rockstar", "ninja"). Avoid exclamation points and forced enthusiasm. Prefer commas and short sentences over stacking hyphenated clauses or semicolons — one em dash for the Hook's opening beat is fine (see the worked example), but don't lean on dashes as a crutch throughout. Never ask more than one question. Never fabricate or shorten a job link — if none is given, simply don't include one.
 
 Model the tone and shape EXACTLY on this real worked example (do not copy its content):
 """

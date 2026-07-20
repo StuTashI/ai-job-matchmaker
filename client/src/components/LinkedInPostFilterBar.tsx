@@ -1,19 +1,10 @@
-import {
-  POST_AGE_FILTER_OPTIONS,
-  SCORE_FILTER_OPTIONS,
-  SORT_OPTIONS,
-  type PostAgeFilter,
-  type ScoreFilter,
-  type SortOption,
-} from "../lib/linkedInPostFilters";
+import { POST_AGE_FILTER_OPTIONS, SORT_OPTIONS, type PostAgeFilter, type SortOption } from "../lib/linkedInPostFilters";
 
 interface LinkedInPostFilterBarProps {
   resultCount: number;
   postAgeFilter: PostAgeFilter;
-  scoreFilter: ScoreFilter;
   sort: SortOption;
   onPostAgeFilterChange: (value: PostAgeFilter) => void;
-  onScoreFilterChange: (value: ScoreFilter) => void;
   onSortChange: (value: SortOption) => void;
 }
 
@@ -49,10 +40,8 @@ function Select<T extends string>({
 export function LinkedInPostFilterBar({
   resultCount,
   postAgeFilter,
-  scoreFilter,
   sort,
   onPostAgeFilterChange,
-  onScoreFilterChange,
   onSortChange,
 }: LinkedInPostFilterBarProps) {
   return (
@@ -60,7 +49,6 @@ export function LinkedInPostFilterBar({
       <span className="text-sm font-medium text-slate-700">{resultCount} posts</span>
       <div className="flex flex-wrap items-center gap-3">
         <Select label="Posted" value={postAgeFilter} options={POST_AGE_FILTER_OPTIONS} onChange={onPostAgeFilterChange} />
-        <Select label="Score" value={scoreFilter} options={SCORE_FILTER_OPTIONS} onChange={onScoreFilterChange} />
         <Select label="Sort by" value={sort} options={SORT_OPTIONS} onChange={onSortChange} />
       </div>
     </div>

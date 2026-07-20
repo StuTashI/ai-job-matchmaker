@@ -82,28 +82,51 @@ function buildHook(job: Job, channel: "message" | "email", variant: number): str
 }
 
 // BRIDGE: who the sender is, told through relevance to the recipient — capped to the top 2
-// concrete achievements from the most recent role, never a full bio. On regeneration, rotate
-// which achievements lead (when more than 2 exist) so a retry can surface a different one.
+// concrete achievements from the most recent role, never a full bio. Metric-bearing
+// highlights (a number, a %) are surfaced first — a quantified result reads stronger than
+// a narrative-only one — with variant-based rotation on top of that for regenerate.
 function pickHighlights(highlights: string[], variant: number): string[] {
   const available = highlights.filter(Boolean);
-  if (available.length <= 2) return available;
-  const offset = variant % available.length;
-  const rotated = [...available.slice(offset), ...available.slice(0, offset)];
+  if (available.length === 0) return [];
+  const hasMetric = (h: string) => /\d/.test(h);
+  const metricSorted = [...available].sort((a, b) => Number(hasMetric(b)) - Number(hasMetric(a)));
+  const offset = variant % metricSorted.length;
+  const rotated = [...metricSorted.slice(offset), ...metricSorted.slice(0, offset)];
   return rotated.slice(0, 2);
 }
 
-function buildBridge(resume: ParsedResume, job: Job, variant: number): string {
+// The closing "why this matters" clause used to be a single canned sentence regardless of
+// the job — names an actual overlapping skill/domain from the job's requirements instead,
+// so it reads as genuinely tied to this posting rather than a placeholder.
+function relevanceClause(resume: ParsedResume, job: Job): string {
+  const overlap = overlappingSkills(resume, job, 2);
+  if (overlap.length > 0) {
+    return `particularly relevant given this role's focus on ${overlap.join(" and ")}`;
+  }
+  if (job.company) {
+    return `well-aligned with what ${job.company} is building`;
+  }
+  return "closely aligned with what this role is asking for";
+}
+
+// Email gets a second sentence of room for the relevance clause (per the original
+// five-part doc: "slightly more room for the Bridge" in email); the LinkedIn message stays
+// to one tight sentence — a real structural difference between the two, not just a subject
+// line and sign-off.
+function buildBridge(resume: ParsedResume, job: Job, variant: number, channel: "message" | "email"): string {
   const recentExp = resume.experience[0];
   const highlightList = recentExp ? pickHighlights(recentExp.highlights, variant).map((h) => asFragment(h)) : [];
+  const relevance = relevanceClause(resume, job);
 
   if (recentExp && highlightList.length > 0) {
-    return `Quick context on me: I'm a ${recentExp.role} at ${recentExp.company || "my current company"}, where I ${highlightList.join(" and ")}. That work maps closely to what this role is asking for.`;
+    const lead = `Quick context on me: I'm a ${recentExp.role} at ${recentExp.company || "my current company"}, where I ${highlightList.join(" and ")}.`;
+    return channel === "email" ? `${lead} That's ${relevance}.` : `${lead.slice(0, -1)}, ${relevance}.`;
   }
   if (recentExp) {
-    return `Quick context on me: I'm a ${recentExp.role} at ${recentExp.company || "my current company"}, where I've spent ${tenureAtRecentRole(recentExp.duration)} building hands-on experience relevant to this role.`;
+    return `Quick context on me: I'm a ${recentExp.role} at ${recentExp.company || "my current company"}, where I've spent ${tenureAtRecentRole(recentExp.duration)} building hands-on experience ${relevance}.`;
   }
   const bridgeSkills = overlappingSkills(resume, job, 2).join(" and ") || "this space";
-  return `Quick context on me: my background across ${bridgeSkills} maps closely to what this role is asking for.`;
+  return `Quick context on me: my background across ${bridgeSkills} is ${relevance}.`;
 }
 
 // THE ASK: always explicit, and shaped by who's being messaged — a job poster gets a
@@ -111,10 +134,14 @@ function buildBridge(resume: ParsedResume, job: Job, variant: number): string {
 const POSTER_ASKS = [
   "I'd be glad to apply through the standard process, but wanted to introduce myself directly first.",
   "Happy to go through the standard application, but wanted to say hello directly first.",
+  "I'll apply through the usual process either way, but wanted to put a face to the application first.",
+  "Planning to apply through the standard flow, but figured a direct hello first couldn't hurt.",
 ];
 const NON_POSTER_ASKS = [
   "Would you be open to a referral, or pointing me to whoever's closest to this hire?",
   "Any chance you'd be open to a referral, or could point me to the right person for this?",
+  "Would you be willing to refer me, or nudge me toward whoever owns this hire?",
+  "Open to referring me, or is there someone closer to this search I should be talking to?",
 ];
 
 function buildAsk(referrer: Referrer, variant: number): string {
@@ -126,10 +153,14 @@ function buildAsk(referrer: Referrer, variant: number): string {
 const POSTER_CLOSES = [
   "Even a quick yes/no on whether to apply now would be plenty.",
   "No pressure either way — even a quick heads-up would help me decide next steps.",
+  "Totally fine if now's not the right time — a quick heads-up either way helps.",
+  "Even a one-line reply would be plenty to go on.",
 ];
 const NON_POSTER_CLOSES = [
   "A short reply, or even just a redirect to the right person, is genuinely enough.",
   "Even a quick pointer to the right person would mean a lot.",
+  "No worries if it's not you — even a name to redirect to would help a lot.",
+  "Happy to keep this brief — a quick reply either way is genuinely enough.",
 ];
 
 function lowFrictionClose(referrer: Referrer, variant: number): string {
@@ -140,7 +171,13 @@ function lowFrictionClose(referrer: Referrer, variant: number): string {
 // HONEST GAP: only included when a real gap exists — named plainly, once, never apologized for.
 function buildHonestGap(topGap: string | undefined): string | null {
   if (!topGap) return null;
-  return `One honest gap: I don't have direct ${topGap} experience — flagging it upfront rather than hoping it doesn't surface later.`;
+  const trimmed = topGap.trim();
+  // Some gap phrases already end in a noun like "experience"/"knowledge"/"expertise" —
+  // appending "experience" again produces an awkward double-noun ("compliance knowledge
+  // experience"). Only append it when the phrase doesn't already end in one.
+  const alreadyHasNoun = /\b(experience|knowledge|expertise|skills?)$/i.test(trimmed);
+  const gapPhrase = alreadyHasNoun ? trimmed : `${trimmed} experience`;
+  return `One honest gap: I don't have direct ${gapPhrase} — flagging it upfront rather than hoping it doesn't surface later.`;
 }
 
 export function draftOutreachFallback(
@@ -161,7 +198,7 @@ export function draftOutreachFallback(
     "",
     buildHook(job, "message", variant),
     "",
-    buildBridge(resume, job, variant),
+    buildBridge(resume, job, variant, "message"),
     ...(gapLine ? ["", gapLine] : []),
     "",
     askLine,
@@ -180,7 +217,7 @@ export function draftOutreachFallback(
     "",
     buildHook(job, "email", variant),
     "",
-    buildBridge(resume, job, variant),
+    buildBridge(resume, job, variant, "email"),
     ...(gapLine ? ["", gapLine] : []),
     "",
     askLine,

@@ -5,7 +5,6 @@ import { filterAndSortJobs, type DateFilter, type SourceFilter, type SortOption 
 import {
   filterAndSortPosts,
   type PostAgeFilter,
-  type ScoreFilter as LinkedInScoreFilter,
   type SortOption as LinkedInSortOption,
 } from "../lib/linkedInPostFilters";
 import { computeTodaysPriority } from "../lib/priority";
@@ -35,10 +34,8 @@ export function HomePage() {
   const [sourceFilter, setSourceFilter] = useState<SourceFilter>("any");
   const [sort, setSort] = useState<SortOption>("score-desc");
 
-  const [linkedInScoring, setLinkedInScoring] = useState(false);
   const [postAgeFilter, setPostAgeFilter] = useState<PostAgeFilter>("any");
-  const [linkedInScoreFilter, setLinkedInScoreFilter] = useState<LinkedInScoreFilter>("any");
-  const [linkedInSort, setLinkedInSort] = useState<LinkedInSortOption>("score-desc");
+  const [linkedInSort, setLinkedInSort] = useState<LinkedInSortOption>("date-desc");
 
   async function handleResults(results: Job[]) {
     setJobs(results);
@@ -54,18 +51,8 @@ export function HomePage() {
     }
   }
 
-  async function handleLinkedInResults(results: LinkedInJob[]) {
+  function handleLinkedInResults(results: LinkedInJob[]) {
     setLinkedInPosts(results);
-    if (!resume || results.length === 0) return;
-    setLinkedInScoring(true);
-    try {
-      const scores = await batchMatch(resume, results);
-      setLinkedInPosts(results.map((post) => ({ ...post, analysis: scores[post.id] ?? post.analysis })));
-    } catch (err) {
-      show(err instanceof Error ? err.message : "Failed to score matches", "error");
-    } finally {
-      setLinkedInScoring(false);
-    }
   }
 
   function handleTrack(job: Job) {
@@ -80,10 +67,9 @@ export function HomePage() {
   const todaysPriority = useMemo(() => computeTodaysPriority(jobs), [jobs]);
 
   const visibleLinkedInPosts = useMemo(
-    () => filterAndSortPosts(linkedInPosts, postAgeFilter, linkedInScoreFilter, linkedInSort),
-    [linkedInPosts, postAgeFilter, linkedInScoreFilter, linkedInSort],
+    () => filterAndSortPosts(linkedInPosts, postAgeFilter, linkedInSort),
+    [linkedInPosts, postAgeFilter, linkedInSort],
   );
-  const linkedInTodaysPriority = useMemo(() => computeTodaysPriority(linkedInPosts), [linkedInPosts]);
 
   return (
     <div className="mx-auto max-w-7xl space-y-6 px-4 py-8">
@@ -144,23 +130,17 @@ export function HomePage() {
             <LinkedInPostsSearchPanel onResults={handleLinkedInResults} />
           </div>
           <div className="min-w-0">
-            {linkedInTodaysPriority && (
-              <TodaysPriorityBanner insight={linkedInTodaysPriority.insight} topJobs={linkedInTodaysPriority.topJobs} />
-            )}
             <LinkedInPostFilterBar
               resultCount={visibleLinkedInPosts.length}
               postAgeFilter={postAgeFilter}
-              scoreFilter={linkedInScoreFilter}
               sort={linkedInSort}
               onPostAgeFilterChange={setPostAgeFilter}
-              onScoreFilterChange={setLinkedInScoreFilter}
               onSortChange={setLinkedInSort}
             />
             <LinkedInPostCardGrid
               posts={visibleLinkedInPosts}
               hasUnfilteredResults={linkedInPosts.length > 0}
               isTracked={isTracked}
-              scoring={linkedInScoring}
               onTrack={handleTrack}
             />
           </div>

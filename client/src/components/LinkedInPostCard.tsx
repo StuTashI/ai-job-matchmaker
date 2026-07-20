@@ -2,12 +2,6 @@ import { Bookmark, BookmarkCheck, ExternalLink, MessageCircle, Repeat2, ThumbsUp
 import type { LinkedInJob } from "../lib/types";
 import { formatPostedAt } from "../lib/dateUtils";
 
-function scoreColor(score: number): string {
-  if (score >= 75) return "bg-emerald-500";
-  if (score >= 55) return "bg-amber-500";
-  return "bg-rose-500";
-}
-
 const AVATAR_COLORS = [
   "bg-sky-500", "bg-violet-500", "bg-amber-500", "bg-emerald-500", "bg-rose-500", "bg-indigo-500",
 ];
@@ -37,36 +31,15 @@ function summarize(text: string, maxLength = 200): string {
   return `${truncated.slice(0, lastSpace > 0 ? lastSpace : maxLength)}...`;
 }
 
-const SOURCE_LABELS: Record<LinkedInJob["postSource"], { label: string; className: string }> = {
-  structured: { label: "Verified job posting", className: "bg-emerald-100 text-emerald-700" },
-  classified: { label: "AI-matched from post", className: "bg-slate-100 text-slate-600" },
-};
-
 interface LinkedInPostCardProps {
   post: LinkedInJob;
   tracked: boolean;
-  scoring: boolean;
   onTrack: (job: LinkedInJob) => void;
 }
 
-export function LinkedInPostCard({ post, tracked, scoring, onTrack }: LinkedInPostCardProps) {
-  const score = post.analysis?.matchScore;
-  const source = SOURCE_LABELS[post.postSource];
-
+export function LinkedInPostCard({ post, tracked, onTrack }: LinkedInPostCardProps) {
   return (
     <div className="flex flex-col gap-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm transition-shadow hover:shadow-md sm:flex-row sm:items-start">
-      <div className="flex shrink-0 items-center justify-center sm:w-16">
-        {scoring ? (
-          <div className="h-11 w-11 animate-pulse rounded-full bg-slate-200" />
-        ) : score != null ? (
-          <span className={`flex h-11 w-11 items-center justify-center rounded-full text-xs font-bold text-white ${scoreColor(score)}`}>
-            {score}%
-          </span>
-        ) : (
-          <span className="text-center text-[10px] text-slate-400">No score</span>
-        )}
-      </div>
-
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2">
           <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-[11px] font-bold text-white ${avatarColor(post.author.name)}`}>
@@ -76,7 +49,6 @@ export function LinkedInPostCard({ post, tracked, scoring, onTrack }: LinkedInPo
             <p className="truncate text-xs font-medium text-slate-700">{post.author.name}</p>
             {post.author.headline && <p className="truncate text-[11px] text-slate-400">{post.author.headline}</p>}
           </div>
-          <span className={`ml-auto shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium ${source.className}`}>{source.label}</span>
         </div>
 
         <h3 className="mt-1.5 truncate text-base font-semibold text-slate-900">{post.title}</h3>

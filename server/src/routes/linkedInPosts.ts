@@ -131,16 +131,14 @@ linkedInPostsRouter.post("/search", async (req, res) => {
     // Cheapest filter first: hard age cutoff before anything gets classified.
     const recentPosts = rawPosts.filter((post) => isWithinAgeLimit(post));
 
-    const structured: { post: RawLinkedInPost; extracted: ExtractedJobFields }[] = [];
     const needsClassification: { post: RawLinkedInPost; roleTitle: string }[] = [];
 
     for (const post of recentPosts) {
       const roleTitle = keywordToTitle.get(post.input ?? "") ?? titles[0];
-      const structuredCard = extractStructuredJobCard(post);
-      if (structuredCard) {
-        structured.push({ post, extracted: structuredCard });
-        continue;
-      }
+      // Posts with a LinkedIn-attached job card are excluded on purpose — this tab is
+      // specifically for organic "someone posted about hiring" content, not posts that
+      // already look like a job-board listing (that's what Find Jobs is for).
+      if (extractStructuredJobCard(post)) continue;
       if (passesHiringIntentHeuristic(post, roleTitle)) {
         needsClassification.push({ post, roleTitle });
       }
@@ -148,7 +146,7 @@ linkedInPostsRouter.post("/search", async (req, res) => {
 
     const classified = env.hasGemini ? await classifyWithGemini(needsClassification) : new Map<number, ExtractedJobFields>();
 
-    const heuristicOnly = needsClassification
+    const candidates = needsClassification
       .map((candidate, index) => ({ candidate, extracted: classified.get(index) }))
       .map(({ candidate, extracted }) => ({
         post: candidate.post,
@@ -157,7 +155,7 @@ linkedInPostsRouter.post("/search", async (req, res) => {
 
     const locationTokens = locations.flatMap(tokenizeLocation);
 
-    const jobs: LinkedInJob[] = [...structured, ...heuristicOnly]
+    const jobs: LinkedInJob[] = candidates
       .filter(({ post, extracted }) => matchesLocationHint(post, extracted, locationTokens))
       .map(({ post, extracted }) => normalizeLinkedInPost(post, extracted))
       .filter((job): job is LinkedInJob => job !== null);
