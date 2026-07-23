@@ -2,8 +2,7 @@ import { Router } from "express";
 import { Type } from "@google/genai";
 import { env } from "../env.js";
 import { generateStructured } from "../services/gemini.js";
-import { draftOutreachFallback, isJobPoster, synthesizeReferrer } from "../services/outreachFallback.js";
-import { scoreMatchFallback } from "../services/matchFallback.js";
+import { draftOutreachFallback, extractLikelyGap, isJobPoster, synthesizeReferrer } from "../services/outreachFallback.js";
 import type { Job, ParsedResume, Referrer } from "../types.js";
 
 const OUTREACH_SCHEMA = {
@@ -132,11 +131,13 @@ Return only the drafted text in the "text" field — nothing else, no explanatio
 }
 
 function computeOutreachGaps(resume: ParsedResume, job: Job): string[] {
-  const { gaps: rawGaps } = scoreMatchFallback(resume, job);
-  // Only reference short, skill/domain-shaped gaps in outreach — computed gaps can
-  // also be full explanatory sentences (e.g. a function mismatch), which read as
-  // garbled nonsense once dropped into "I don't have direct X experience".
-  return rawGaps.filter((g) => g.length <= 30 && !g.toLowerCase().startsWith("this role is in"));
+  // Prefer the real, evidence-traced gaps from a completed Analyze report; only fall back
+  // to a quick substring check when outreach is drafted before any scoring has happened.
+  if (job.analysis?.report?.skillGaps?.length) {
+    return job.analysis.report.skillGaps;
+  }
+  const gap = extractLikelyGap(resume, job);
+  return gap ? [gap] : [];
 }
 
 export const outreachRouter = Router();

@@ -35,20 +35,46 @@ export async function searchLinkedInPosts(criteria: LinkedInPostSearchCriteria):
   return data.jobs;
 }
 
+// Doesn't reuse handleJson — this route's 503 body carries a `reason` (gemini_not_configured
+// vs gemini_failed) that's worth surfacing as a specific, actionable message instead of the
+// generic word "unavailable", since there's no fallback here and the user needs to know
+// whether to configure a key or just wait out the free-tier daily quota.
 export async function matchJob(resume: ParsedResume, job: Job): Promise<JobAnalysis> {
   const res = await fetch("/api/match", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ resume, job }),
   });
-  return handleJson<JobAnalysis>(res);
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    if (body.reason === "gemini_not_configured") {
+      throw new Error("Gemini isn't configured — add a key on the Configuration page to unlock the deep report.");
+    }
+    if (body.reason === "gemini_failed") {
+      throw new Error(
+        "The Gemini call failed or timed out — this is often the free-tier daily quota (as low as 20 requests/day, shared across every AI feature in this app) being exhausted. Try again later, or add a different key on the Configuration page.",
+      );
+    }
+    throw new Error(body.error ?? `Request failed with status ${res.status}`);
+  }
+  return res.json() as Promise<JobAnalysis>;
 }
 
 // Chunked so the request body stays small regardless of how many jobs a search returns
-// (some sources are uncapped and can return hundreds of results in one search).
+// (some sources are uncapped and can return hundreds of results in one search). Each chunk
+// is scored via a single batched Gemini call server-side — a >150-result search costing 2+
+// Gemini calls instead of 1 is a known, accepted edge case, not something engineered around.
 const BATCH_CHUNK_SIZE = 150;
 
-export async function batchMatch(resume: ParsedResume, jobs: Job[]): Promise<Record<string, JobAnalysis>> {
+export interface BatchMatchResult {
+  scores: Record<string, JobAnalysis>;
+}
+
+// Server-side, every job in the response gets a real score — either Gemini-scored, or a
+// heuristic estimate (marked `analysis.estimated`) if Gemini was unavailable/failed/out of
+// quota. `unavailable` no longer exists here for that reason; a rejected promise below means
+// the request itself failed (network/server error), not a Gemini-side failure.
+export async function batchMatch(resume: ParsedResume, jobs: Job[]): Promise<BatchMatchResult> {
   const chunks: Job[][] = [];
   for (let i = 0; i < jobs.length; i += BATCH_CHUNK_SIZE) {
     chunks.push(jobs.slice(i, i + BATCH_CHUNK_SIZE));
@@ -61,12 +87,11 @@ export async function batchMatch(resume: ParsedResume, jobs: Job[]): Promise<Rec
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ resume, jobs: chunk }),
       });
-      const data = await handleJson<{ scores: Record<string, JobAnalysis> }>(res);
-      return data.scores;
+      return handleJson<{ scores: Record<string, JobAnalysis> }>(res);
     }),
   );
 
-  return Object.assign({}, ...chunkResults);
+  return { scores: Object.assign({}, ...chunkResults.map((r) => r.scores)) };
 }
 
 export interface OutreachResult {

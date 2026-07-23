@@ -40,11 +40,70 @@ export interface JobGuidance {
   confidenceNote: string;
 }
 
+// The six Resume<->JD Fit Scoring Agent dimensions, each 0-5. Weights: skillExperienceOverlap
+// 25%, domainIndustryMatch 20%, roleSeniorityMatch 15%, quantifiedImpactStrength 15%,
+// atsKeywordCoverage 15%, ownershipScopeMatch 10% — see matchScoring.ts for the formula.
+export type DimensionKey =
+  | "skillExperienceOverlap"
+  | "domainIndustryMatch"
+  | "roleSeniorityMatch"
+  | "quantifiedImpactStrength"
+  | "atsKeywordCoverage"
+  | "ownershipScopeMatch";
+
+export type DimensionScores = Record<DimensionKey, number>;
+
+export type ScoreBand = "excellent" | "strong" | "moderate" | "weak";
+
+export interface StrengthItem {
+  jdRequirement: string;
+  resumeEvidence: string;
+}
+
+export interface MismatchItem {
+  jdRequirement: string;
+  detail: string;
+}
+
+export interface NeedsImprovementItem {
+  area: string;
+  issue: string;
+  resumeEvidence: string;
+}
+
+export interface SuggestedImprovement {
+  targetArea: string;
+  issue: string;
+  before?: string;
+  after?: string;
+  fixDescription: string;
+}
+
+// The full evidence-based report (rubric sections 2-8) produced only by the on-demand
+// per-job deep analysis — never by the batched list-view scoring call.
+export interface JobReport {
+  verdict: string;
+  whatsGood: StrengthItem[];
+  whatsBad: MismatchItem[];
+  needsImprovement: NeedsImprovementItem[];
+  skillGaps: string[];
+  suggestedImprovements: SuggestedImprovement[];
+  doThis: string[];
+  dontDoThis: string[];
+}
+
 export interface JobAnalysis {
   matchScore: number;
-  gaps: string[];
-  improvements: string[];
+  band: ScoreBand;
+  dimensions: DimensionScores;
   guidance: JobGuidance;
+  // Present only once the on-demand deep report has succeeded — batch/list-view scoring
+  // sets matchScore/band/dimensions/guidance but never this field.
+  report?: JobReport;
+  // True only when list-view/batch scoring fell back to the local heuristic estimator
+  // (Gemini unavailable, failed, or the daily quota was exhausted) instead of a real
+  // Gemini-scored batch result. Never set on a report-bearing (deep, on-demand) analysis.
+  estimated?: boolean;
   customMessage: string;
   customEmail: string;
 }
@@ -83,7 +142,7 @@ export interface LinkedInPostEngagement {
 // A LinkedIn hiring *post* (not a structured job-board listing) normalized into the
 // shared Job shape for scoring, plus the extra author/engagement fields the dedicated
 // LinkedInPostCard needs for display. Every function that only needs the Job subset
-// (scoringSignals.ts, matchFallback.ts, outreach) works on this unmodified.
+// (matchScoring.ts, outreach) works on this unmodified.
 export interface LinkedInJob extends Job {
   author: LinkedInPostAuthor;
   engagement?: LinkedInPostEngagement;

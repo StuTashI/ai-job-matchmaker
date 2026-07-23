@@ -61,11 +61,100 @@ export interface JobGuidance {
   confidenceNote: string;
 }
 
+// The six Resume<->JD Fit Scoring Agent dimensions, each 0-5. Weights below mirror
+// server/src/services/matchScoring.ts's formula — kept here purely for display (the
+// breakdown table in the Analyze drawer), the server never trusts a client-computed score.
+export type DimensionKey =
+  | "skillExperienceOverlap"
+  | "domainIndustryMatch"
+  | "roleSeniorityMatch"
+  | "quantifiedImpactStrength"
+  | "atsKeywordCoverage"
+  | "ownershipScopeMatch";
+
+export type DimensionScores = Record<DimensionKey, number>;
+
+export type ScoreBand = "excellent" | "strong" | "moderate" | "weak";
+
+export const DIMENSION_LABELS: Record<DimensionKey, string> = {
+  skillExperienceOverlap: "Skill and Experience Overlap",
+  domainIndustryMatch: "Domain and Industry Match",
+  roleSeniorityMatch: "Role and Seniority Match",
+  quantifiedImpactStrength: "Quantified Impact Strength",
+  atsKeywordCoverage: "ATS Keyword Coverage",
+  ownershipScopeMatch: "Ownership and Scope Match",
+};
+
+export const DIMENSION_WEIGHTS: Record<DimensionKey, number> = {
+  skillExperienceOverlap: 0.25,
+  domainIndustryMatch: 0.2,
+  roleSeniorityMatch: 0.15,
+  quantifiedImpactStrength: 0.15,
+  atsKeywordCoverage: 0.15,
+  ownershipScopeMatch: 0.1,
+};
+
+export const BAND_LABELS: Record<ScoreBand, string> = {
+  excellent: "Excellent match — apply as-is",
+  strong: "Strong match — apply after edits",
+  moderate: "Moderate match — address gaps first",
+  weak: "Weak match — don't apply yet",
+};
+
+export const BAND_STYLES: Record<ScoreBand, string> = {
+  excellent: "bg-emerald-500",
+  strong: "bg-emerald-500",
+  moderate: "bg-amber-500",
+  weak: "bg-rose-500",
+};
+
+export interface StrengthItem {
+  jdRequirement: string;
+  resumeEvidence: string;
+}
+
+export interface MismatchItem {
+  jdRequirement: string;
+  detail: string;
+}
+
+export interface NeedsImprovementItem {
+  area: string;
+  issue: string;
+  resumeEvidence: string;
+}
+
+export interface SuggestedImprovement {
+  targetArea: string;
+  issue: string;
+  before?: string;
+  after?: string;
+  fixDescription: string;
+}
+
+// The full evidence-based report (rubric sections 2-8) — present only once the on-demand
+// deep analysis has succeeded; batch/list-view scoring never sets this.
+export interface JobReport {
+  verdict: string;
+  whatsGood: StrengthItem[];
+  whatsBad: MismatchItem[];
+  needsImprovement: NeedsImprovementItem[];
+  skillGaps: string[];
+  suggestedImprovements: SuggestedImprovement[];
+  doThis: string[];
+  dontDoThis: string[];
+}
+
 export interface JobAnalysis {
   matchScore: number;
-  gaps: string[];
-  improvements: string[];
+  band: ScoreBand;
+  dimensions: DimensionScores;
   guidance: JobGuidance;
+  report?: JobReport;
+  // True only when list-view/batch scoring fell back to the local heuristic estimator
+  // (Gemini unavailable, failed, or the daily quota was exhausted) instead of a real
+  // Gemini-scored batch result. Never set on a report-bearing (deep, on-demand) analysis.
+  estimated?: boolean;
   customMessage: string;
   customEmail: string;
 }

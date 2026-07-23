@@ -60,6 +60,23 @@ function overlappingSkills(resume: ParsedResume, job: Job, limit: number): strin
   return pool.slice(0, limit);
 }
 
+// Used only when outreach is drafted before any Gemini-scored analysis exists for this job
+// (job.analysis?.report is absent) — a small substring-overlap check against job.requirements,
+// just enough to name one honest gap. Not a resurrection of the retired heuristic scoring
+// system; the real gap list now comes from job.analysis.report.skillGaps once scoring has run.
+export function extractLikelyGap(resume: ParsedResume, job: Job): string | undefined {
+  const resumeSkills = resume.skills.map(normalize);
+  const corpus = `${resume.summary} ${resume.experience.flatMap((e) => [e.role, ...e.highlights]).join(" ")}`.toLowerCase();
+  for (const requirement of job.requirements) {
+    const normalized = normalize(requirement);
+    if (!normalized) continue;
+    const isMatched =
+      resumeSkills.some((skill) => normalized.includes(skill) || skill.includes(normalized)) || corpus.includes(normalized);
+    if (!isMatched) return requirement;
+  }
+  return undefined;
+}
+
 // HOOK: names the exact opening (and, for InMail/email, the real job link — never fabricated
 // or shortened) as the reason for reaching out. This is the "I did my research" signal, so it
 // always leads. A few equivalent lead-ins let "regenerate" produce a genuinely different draft

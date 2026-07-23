@@ -1,5 +1,6 @@
 import { Bookmark, BookmarkCheck, Briefcase, Calendar, MapPin } from "lucide-react";
 import type { Job } from "../lib/types";
+import { BAND_STYLES } from "../lib/types";
 import { formatPostedAt } from "../lib/dateUtils";
 
 const PORTAL_COLORS: Record<string, string> = {
@@ -12,31 +13,40 @@ const PORTAL_COLORS: Record<string, string> = {
 };
 const DEFAULT_PORTAL_COLOR = "bg-slate-100 text-slate-600";
 
-function scoreColor(score: number): string {
-  if (score >= 75) return "bg-emerald-500";
-  if (score >= 55) return "bg-amber-500";
-  return "bg-rose-500";
-}
-
 interface JobCardProps {
   job: Job;
   tracked: boolean;
   scoring: boolean;
+  scoringUnavailable: boolean;
   onAnalyze: (job: Job) => void;
   onTrack: (job: Job) => void;
 }
 
-export function JobCard({ job, tracked, scoring, onAnalyze, onTrack }: JobCardProps) {
-  const score = job.analysis?.matchScore;
+export function JobCard({ job, tracked, scoring, scoringUnavailable, onAnalyze, onTrack }: JobCardProps) {
+  const analysis = job.analysis;
 
   return (
     <div className="flex flex-col gap-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm transition-shadow hover:shadow-md sm:flex-row sm:items-center">
       <div className="flex shrink-0 items-center justify-center sm:w-16">
         {scoring ? (
           <div className="h-11 w-11 animate-pulse rounded-full bg-slate-200" />
-        ) : score != null ? (
-          <span className={`flex h-11 w-11 items-center justify-center rounded-full text-xs font-bold text-white ${scoreColor(score)}`}>
-            {score}%
+        ) : analysis != null ? (
+          <span
+            className={`flex h-11 w-11 items-center justify-center rounded-full text-xs font-bold text-white ${BAND_STYLES[analysis.band]} ${
+              analysis.estimated ? "border-2 border-dashed border-slate-400 opacity-70" : ""
+            }`}
+            title={
+              analysis.estimated
+                ? "Estimated — Gemini was unavailable or out of quota; open Analyze for the full AI report"
+                : undefined
+            }
+          >
+            {analysis.estimated ? "~" : ""}
+            {analysis.matchScore}%
+          </span>
+        ) : scoringUnavailable ? (
+          <span className="text-center text-[10px] text-amber-600" title="Gemini isn't configured or the batch scoring call failed">
+            Score unavailable
           </span>
         ) : (
           <span className="text-center text-[10px] text-slate-400">No score</span>

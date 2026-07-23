@@ -1,8 +1,8 @@
 import { useEffect, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
-import { Check, Copy, ExternalLink, Loader2, RefreshCw, X } from "lucide-react";
-import type { GapType, GuidancePath, Job, JobAnalysis, Referrer } from "../lib/types";
-import { GAP_TYPE_LABELS, PATH_LABELS } from "../lib/types";
+import { AlertTriangle, Check, Copy, ExternalLink, Loader2, RefreshCw, X } from "lucide-react";
+import type { DimensionKey, GapType, GuidancePath, Job, JobAnalysis, Referrer } from "../lib/types";
+import { BAND_LABELS, BAND_STYLES, DIMENSION_LABELS, DIMENSION_WEIGHTS, GAP_TYPE_LABELS, PATH_LABELS } from "../lib/types";
 import { getOutreach, matchJob, regenerateOutreach } from "../lib/api";
 import { useAppState } from "../state/AppContext";
 import { useToast } from "./Toast";
@@ -22,11 +22,21 @@ const PATH_STYLES: Record<GuidancePath, string> = {
   skip: "bg-rose-100 text-rose-700",
 };
 
+const DIMENSION_ORDER: DimensionKey[] = [
+  "skillExperienceOverlap",
+  "domainIndustryMatch",
+  "roleSeniorityMatch",
+  "quantifiedImpactStrength",
+  "atsKeywordCoverage",
+  "ownershipScopeMatch",
+];
+
 type Tab = "overview" | "analysis" | "outreach";
 
 interface JobDetailDrawerProps {
   job: Job | null;
   onClose: () => void;
+  onAnalysisUpdated?: (jobId: string, analysis: JobAnalysis) => void;
 }
 
 function CopyButton({ text }: { text: string }) {
@@ -63,12 +73,39 @@ function RegenerateButton({ regenerating, onClick }: { regenerating: boolean; on
   );
 }
 
-export function JobDetailDrawer({ job, onClose }: JobDetailDrawerProps) {
+function DimensionTable({ analysis }: { analysis: JobAnalysis }) {
+  return (
+    <div className="overflow-x-auto">
+      <table className="w-full text-left text-xs">
+        <thead>
+          <tr className="text-slate-500">
+            <th className="py-1 pr-2 font-medium">Dimension</th>
+            <th className="py-1 pr-2 font-medium">Weight</th>
+            <th className="py-1 font-medium">Score</th>
+          </tr>
+        </thead>
+        <tbody>
+          {DIMENSION_ORDER.map((key) => (
+            <tr key={key} className="border-t border-slate-100">
+              <td className="py-1 pr-2 text-slate-700">{DIMENSION_LABELS[key]}</td>
+              <td className="py-1 pr-2 text-slate-500">{Math.round(DIMENSION_WEIGHTS[key] * 100)}%</td>
+              <td className="py-1 font-medium text-slate-900">{analysis.dimensions[key]}/5</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+export function JobDetailDrawer({ job, onClose, onAnalysisUpdated }: JobDetailDrawerProps) {
   const { resume } = useAppState();
   const { show } = useToast();
   const [tab, setTab] = useState<Tab>("overview");
-  const [loading, setLoading] = useState(false);
+  const [analysisLoading, setAnalysisLoading] = useState(false);
+  const [analysisError, setAnalysisError] = useState<string | null>(null);
   const [analysis, setAnalysis] = useState<JobAnalysis | null>(null);
+  const [outreachLoading, setOutreachLoading] = useState(false);
   const [outreach, setOutreach] = useState<{ customMessage: string; customEmail: string; referrer: Referrer } | null>(null);
   const [detailFetched, setDetailFetched] = useState(false);
   const [regeneratingMessage, setRegeneratingMessage] = useState(false);
@@ -79,24 +116,42 @@ export function JobDetailDrawer({ job, onClose }: JobDetailDrawerProps) {
   useEffect(() => {
     setTab("overview");
     setAnalysis(job?.analysis ?? null);
+    setAnalysisError(null);
     setOutreach(null);
     setDetailFetched(false);
     setMessageVariant(0);
     setEmailVariant(0);
   }, [job?.id]);
 
-  async function loadAnalysisAndOutreach() {
+  // Analysis and outreach are independent calls with independent error handling — analysis
+  // can now genuinely fail (Gemini unconfigured/down, no fallback exists) while outreach
+  // still succeeds via its own untouched fallback, so a shared catch would incorrectly
+  // suppress outreach too.
+  async function loadAnalysis() {
     if (!job || !resume) return;
-    setLoading(true);
+    setAnalysisLoading(true);
+    setAnalysisError(null);
     try {
-      const [scored, drafted] = await Promise.all([matchJob(resume, job), getOutreach(resume, job)]);
+      const scored = await matchJob(resume, job);
       setAnalysis(scored);
-      setOutreach(drafted);
-      setDetailFetched(true);
+      onAnalysisUpdated?.(job.id, scored);
     } catch (err) {
-      show(err instanceof Error ? err.message : "Failed to analyze job", "error");
+      setAnalysisError(err instanceof Error ? err.message : "Deep analysis is unavailable right now");
     } finally {
-      setLoading(false);
+      setAnalysisLoading(false);
+    }
+  }
+
+  async function loadOutreach() {
+    if (!job || !resume) return;
+    setOutreachLoading(true);
+    try {
+      const drafted = await getOutreach(resume, job);
+      setOutreach(drafted);
+    } catch (err) {
+      show(err instanceof Error ? err.message : "Failed to draft outreach", "error");
+    } finally {
+      setOutreachLoading(false);
     }
   }
 
@@ -122,8 +177,13 @@ export function JobDetailDrawer({ job, onClose }: JobDetailDrawerProps) {
 
   function handleTabChange(next: Tab) {
     setTab(next);
-    if ((next === "analysis" || next === "outreach") && !detailFetched && !loading) {
-      loadAnalysisAndOutreach();
+    if ((next === "analysis" || next === "outreach") && !detailFetched) {
+      setDetailFetched(true);
+      // Skip re-fetching the deep report if this job already has one (persisted back via
+      // onAnalysisUpdated from a previous open this session) — no reason to re-burn a
+      // Gemini call on a job already fully analyzed.
+      if (!analysis?.report) loadAnalysis();
+      loadOutreach();
     }
   }
 
@@ -215,21 +275,37 @@ export function JobDetailDrawer({ job, onClose }: JobDetailDrawerProps) {
 
               {tab === "analysis" && resume && (
                 <>
-                  {loading && !analysis && (
+                  {analysisLoading && !analysis && (
                     <div className="flex items-center gap-2 text-sm text-slate-500">
                       <Loader2 className="animate-spin" size={16} /> Analyzing fit...
                     </div>
                   )}
-                  {loading && analysis && (
+                  {analysisLoading && analysis && (
                     <div className="flex items-center gap-2 text-xs text-indigo-500">
-                      <Loader2 className="animate-spin" size={12} /> Refining this score with AI...
+                      <Loader2 className="animate-spin" size={12} /> Running the full evidence-based report...
                     </div>
                   )}
+
                   {analysis && (
                     <>
-                      <div className="rounded-lg bg-slate-50 p-4 text-center">
-                        <p className="text-2xl font-bold text-indigo-600">{analysis.matchScore}%</p>
-                        <p className="text-xs text-slate-500">Match Score</p>
+                      <div className="rounded-lg bg-slate-50 p-4">
+                        <h3 className="mb-2 text-sm font-semibold text-slate-700">Score Summary</h3>
+                        {analysis.estimated && (
+                          <p
+                            className="mb-2 rounded-md bg-amber-50 px-2 py-1 text-center text-[11px] text-amber-700"
+                            title="Gemini was unavailable or out of quota, so this is a coarse local estimate, not the full AI analysis"
+                          >
+                            Estimated score — open Analyze for the full AI report
+                          </p>
+                        )}
+                        <div className="text-center">
+                          <p className="text-2xl font-bold text-indigo-600">{analysis.matchScore}%</p>
+                          <p className="text-xs font-medium text-slate-500">{BAND_LABELS[analysis.band]}</p>
+                        </div>
+                        <p className="mt-3 text-center text-sm text-slate-700">{analysis.report?.verdict}</p>
+                        <div className="mt-3">
+                          <DimensionTable analysis={analysis} />
+                        </div>
                       </div>
 
                       <div className="rounded-lg border border-indigo-100 bg-indigo-50/50 p-4">
@@ -249,35 +325,126 @@ export function JobDetailDrawer({ job, onClose }: JobDetailDrawerProps) {
                             ))}
                           </ul>
                         )}
+                        <p className="mt-2 text-xs italic text-slate-400">{analysis.guidance.confidenceNote}</p>
+                      </div>
+                    </>
+                  )}
+
+                  {analysisError && (
+                    <div className="rounded-lg border border-rose-200 bg-rose-50 p-4">
+                      <div className="flex items-center gap-2 text-sm font-medium text-rose-700">
+                        <AlertTriangle size={16} /> Deep analysis unavailable
+                      </div>
+                      <p className="mt-1 text-xs text-rose-600">{analysisError}</p>
+                      <button
+                        type="button"
+                        onClick={loadAnalysis}
+                        className="mt-2 rounded-lg border border-rose-300 bg-white px-3 py-1.5 text-xs font-medium text-rose-700 hover:bg-rose-50"
+                      >
+                        Retry
+                      </button>
+                    </div>
+                  )}
+
+                  {analysis?.report && (
+                    <>
+                      <div>
+                        <h3 className="mb-1 text-sm font-semibold text-slate-700">What's Good</h3>
+                        <ul className="space-y-1.5 text-sm text-slate-600">
+                          {analysis.report.whatsGood.map((item) => (
+                            <li key={`${item.jdRequirement}-${item.resumeEvidence}`} className="rounded-lg bg-emerald-50 p-2">
+                              <span className="font-medium text-slate-800">{item.jdRequirement}</span>
+                              <p className="text-xs text-slate-600">"{item.resumeEvidence}"</p>
+                            </li>
+                          ))}
+                          {analysis.report.whatsGood.length === 0 && <li className="text-xs text-slate-400">Nothing flagged.</li>}
+                        </ul>
+                      </div>
+
+                      <div>
+                        <h3 className="mb-1 text-sm font-semibold text-slate-700">What's Bad</h3>
+                        <ul className="space-y-1.5 text-sm text-slate-600">
+                          {analysis.report.whatsBad.map((item) => (
+                            <li key={`${item.jdRequirement}-${item.detail}`} className="rounded-lg bg-rose-50 p-2">
+                              <span className="font-medium text-slate-800">{item.jdRequirement}</span>
+                              <p className="text-xs text-slate-600">{item.detail}</p>
+                            </li>
+                          ))}
+                          {analysis.report.whatsBad.length === 0 && <li className="text-xs text-slate-400">Nothing flagged.</li>}
+                        </ul>
+                      </div>
+
+                      <div>
+                        <h3 className="mb-1 text-sm font-semibold text-slate-700">Needs Improvement</h3>
+                        <ul className="space-y-1.5 text-sm text-slate-600">
+                          {analysis.report.needsImprovement.map((item) => (
+                            <li key={`${item.area}-${item.issue}`} className="rounded-lg bg-amber-50 p-2">
+                              <span className="font-medium text-slate-800">{item.area}</span>
+                              <p className="text-xs text-slate-600">{item.issue}</p>
+                              <p className="text-xs italic text-slate-500">"{item.resumeEvidence}"</p>
+                            </li>
+                          ))}
+                          {analysis.report.needsImprovement.length === 0 && (
+                            <li className="text-xs text-slate-400">Nothing flagged.</li>
+                          )}
+                        </ul>
                       </div>
 
                       <div>
                         <h3 className="mb-1 text-sm font-semibold text-slate-700">Skill Gaps</h3>
                         <ul className="list-inside list-disc space-y-1 text-sm text-slate-600">
-                          {analysis.gaps.map((gap) => (
+                          {analysis.report.skillGaps.map((gap) => (
                             <li key={gap}>{gap}</li>
                           ))}
+                          {analysis.report.skillGaps.length === 0 && <li className="list-none text-xs text-slate-400">None found.</li>}
                         </ul>
                       </div>
+
                       <div>
                         <h3 className="mb-1 text-sm font-semibold text-slate-700">Suggested Improvements</h3>
-                        <ul className="list-inside list-disc space-y-1 text-sm text-slate-600">
-                          {analysis.improvements.map((imp) => (
-                            <li key={imp}>{imp}</li>
+                        <ul className="space-y-2 text-sm text-slate-600">
+                          {analysis.report.suggestedImprovements.map((item) => (
+                            <li key={`${item.targetArea}-${item.issue}`} className="rounded-lg bg-slate-50 p-2">
+                              <span className="font-medium text-slate-800">{item.targetArea}</span>
+                              <p className="text-xs text-slate-600">{item.issue}</p>
+                              {item.before && (
+                                <p className="mt-1 text-xs text-rose-600">
+                                  <span className="font-medium">Before:</span> {item.before}
+                                </p>
+                              )}
+                              {item.after ? (
+                                <p className="text-xs text-emerald-700">
+                                  <span className="font-medium">After:</span> {item.after}
+                                </p>
+                              ) : (
+                                <p className="text-xs italic text-slate-400">{item.fixDescription}</p>
+                              )}
+                              {item.after && <p className="mt-1 text-xs text-slate-500">{item.fixDescription}</p>}
+                            </li>
                           ))}
+                          {analysis.report.suggestedImprovements.length === 0 && (
+                            <li className="text-xs text-slate-400">Nothing suggested.</li>
+                          )}
                         </ul>
                       </div>
 
                       <div>
                         <h3 className="mb-1 text-sm font-semibold text-slate-700">Do This</h3>
                         <ol className="list-inside list-decimal space-y-1.5 text-sm text-slate-600">
-                          {analysis.guidance.doThis.map((step) => (
+                          {analysis.report.doThis.map((step) => (
                             <li key={step}>{step}</li>
                           ))}
                         </ol>
                       </div>
 
-                      <p className="text-xs italic text-slate-400">{analysis.guidance.confidenceNote}</p>
+                      <div>
+                        <h3 className="mb-1 text-sm font-semibold text-slate-700">Don't Do This</h3>
+                        <ol className="list-inside list-decimal space-y-1.5 text-sm text-slate-600">
+                          {analysis.report.dontDoThis.map((step) => (
+                            <li key={step}>{step}</li>
+                          ))}
+                        </ol>
+                      </div>
                     </>
                   )}
                 </>
@@ -285,7 +452,7 @@ export function JobDetailDrawer({ job, onClose }: JobDetailDrawerProps) {
 
               {tab === "outreach" && resume && (
                 <>
-                  {loading && !outreach && (
+                  {outreachLoading && !outreach && (
                     <div className="flex items-center gap-2 text-sm text-slate-500">
                       <Loader2 className="animate-spin" size={16} /> Drafting outreach...
                     </div>
